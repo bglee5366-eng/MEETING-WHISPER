@@ -2,10 +2,12 @@ const TIMEOUT_MS = 30_000;
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+export const runtime = "nodejs";
 
 function errorResponse(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
 }
+function upstreamError(provider: string, status: number) { if (status === 429) return `${provider} API 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.`; if (status >= 500) return `${provider} 서버에 일시적인 문제가 있습니다. 잠시 후 다시 시도해 주세요.`; return `${provider} 한마디 답변 요청이 거부되었습니다. Vercel Production 환경변수와 provider 설정을 확인해 주세요.`; }
 
 function promptFor(transcript: string, summary: { core: string; issues: string; speakingPoint: string }) {
   return `너는 회의 중 갑자기 발언을 요청받은 사람을 돕는 회의 귓속말 도우미다.
@@ -52,19 +54,19 @@ export async function POST(request: Request) {
       response = await fetch(OPENAI_URL, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ model: process.env.OPENAI_SUMMARY_MODEL || "gpt-4o", input: prompt, store: false }), signal: controller.signal });
       const payload = await response.json().catch(() => null) as { output_text?: string } | null;
       if (response.status === 401 || response.status === 403) return errorResponse("auth_error", "OpenAI API 인증에 실패했습니다.", 502);
-      if (!response.ok) return errorResponse("api_error", "한마디 답변 요청에 실패했습니다.", 502);
+      if (!response.ok) { console.warn("[reply] OpenAI upstream status", response.status); return errorResponse("api_error", upstreamError("OpenAI", response.status), 502); }
       text = payload?.output_text || "";
     } else if (provider === "gemini") {
       response = await fetch(GEMINI_URL, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }), signal: controller.signal });
       const payload = await response.json().catch(() => null) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> } | null;
       if (response.status === 401 || response.status === 403) return errorResponse("auth_error", "Gemini API 인증에 실패했습니다.", 502);
-      if (!response.ok) return errorResponse("api_error", "한마디 답변 요청에 실패했습니다.", 502);
+      if (!response.ok) { console.warn("[reply] Gemini upstream status", response.status); return errorResponse("api_error", upstreamError("Gemini", response.status), 502); }
       text = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "";
     } else {
       response = await fetch(ANTHROPIC_URL, { method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" }, body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514", max_tokens: 250, messages: [{ role: "user", content: prompt }] }), signal: controller.signal });
       const payload = await response.json().catch(() => null) as { content?: Array<{ text?: string }> } | null;
       if (response.status === 401 || response.status === 403) return errorResponse("auth_error", "Claude API 인증에 실패했습니다.", 502);
-      if (!response.ok) return errorResponse("api_error", "한마디 답변 요청에 실패했습니다.", 502);
+      if (!response.ok) { console.warn("[reply] Claude upstream status", response.status); return errorResponse("api_error", upstreamError("Claude", response.status), 502); }
       text = payload?.content?.map((item) => item.text || "").join("") || "";
     }
     const reply = text.trim().replace(/^['"“”]+|['"“”]+$/g, "");

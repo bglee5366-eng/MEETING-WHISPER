@@ -2,6 +2,7 @@ const OPENAI_TRANSCRIPTION_URL = "https://api.openai.com/v1/audio/transcriptions
 const TRANSCRIPTION_TIMEOUT_MS = 30_000;
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 const ALLOWED_AUDIO_TYPES = new Set(["audio/webm", "audio/ogg", "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp3", "audio/mp4", "audio/x-m4a", "audio/flac"]);
+export const runtime = "nodejs";
 
 type Provider = "openai" | "gemini";
 type ErrorCode = "no_api_key" | "no_audio" | "invalid_audio_format" | "auth_error" | "api_error" | "network_error" | "unsupported_provider";
@@ -9,6 +10,7 @@ type ErrorCode = "no_api_key" | "no_audio" | "invalid_audio_format" | "auth_erro
 function errorResponse(code: ErrorCode, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
 }
+function upstreamError(provider: string, status: number) { if (status === 429) return `${provider} 음성 전사 API 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.`; if (status >= 500) return `${provider} 음성 전사 서버에 일시적인 문제가 있습니다. 잠시 후 다시 시도해 주세요.`; return `${provider} 음성 전사 요청이 거부되었습니다. Vercel Production 환경변수와 provider 설정을 확인해 주세요.`; }
 
 export async function POST(request: Request) {
   let formData: FormData;
@@ -51,7 +53,7 @@ export async function POST(request: Request) {
       payload = await response.json().catch(() => null);
     }
     if (response.status === 401 || response.status === 403) return errorResponse("auth_error", `${provider === "gemini" ? "Gemini" : "OpenAI"} API 인증에 실패했습니다. API 키를 확인해 주세요.`, 502);
-    if (!response.ok) return errorResponse("api_error", `${provider === "gemini" ? "Gemini" : "OpenAI"} 음성 전사 요청에 실패했습니다.`, 502);
+    if (!response.ok) { console.warn(`[transcribe] ${provider} upstream status`, response.status); return errorResponse("api_error", upstreamError(provider === "gemini" ? "Gemini" : "OpenAI", response.status), 502); }
     const text = provider === "gemini" ? ((payload as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join(" ").trim() || "") : (typeof (payload as { text?: unknown } | null)?.text === "string" ? ((payload as { text: string }).text).trim() : "");
     return Response.json({ text });
   } catch (cause) {

@@ -4,8 +4,10 @@ const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemi
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const schema = { type: "object", additionalProperties: false, properties: { core: { type: "string" }, issues: { type: "string" }, speakingPoint: { type: "string" }, question: { type: "string" }, decision: { type: "string" }, numbers: { type: "array", items: { type: "string" } } }, required: ["core", "issues", "speakingPoint", "question", "decision", "numbers"] };
 const fallback = { core: "현재 대화만으로는 판단하기 어렵습니다.", issues: "현재 대화만으로는 판단하기 어렵습니다.", speakingPoint: "현재 대화만으로는 판단하기 어렵습니다.", question: "", decision: "", numbers: [] as string[] };
+export const runtime = "nodejs";
 
 function errorResponse(code: string, message: string, status: number) { return Response.json({ error: { code, message } }, { status }); }
+function upstreamError(provider: string, status: number) { if (status === 429) return `${provider} API 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.`; if (status >= 500) return `${provider} 서버에 일시적인 문제가 있습니다. 잠시 후 다시 시도해 주세요.`; return `${provider} 요약 요청이 거부되었습니다. Vercel Production 환경변수와 provider 설정을 확인해 주세요.`; }
 function promptFor(transcript: string) { return `너는 회의에 참석했지만 잠시 집중하지 못한 사람을 위한 "회의 멍때리기 방지 요약기"다. 사용자는 지금 갑자기 "OO님 의견은요?"라는 질문을 받을 수 있다. 일반적인 회의록을 작성하지 말고 직전 10분간의 대화를 빠르게 따라잡을 수 있는 3줄 컨닝페이퍼를 만들어라.
 
 반드시 JSON 객체만 반환하라. 스키마는 다음과 같다:
@@ -48,19 +50,19 @@ export async function POST(request: Request) {
       response = await fetch(OPENAI_URL, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ model: process.env.OPENAI_SUMMARY_MODEL || "gpt-4o", input: prompt, text: { format: { type: "json_schema", name: "meeting_cheat_sheet", strict: true, schema } }, store: false }), signal: controller.signal });
       const payload = await response.json().catch(() => null) as { output_text?: string } | null;
       if (response.status === 401 || response.status === 403) return errorResponse("auth_error", "OpenAI API 인증에 실패했습니다.", 502);
-      if (!response.ok) { console.warn("[summarize] OpenAI upstream status", response.status); return errorResponse("api_error", "OpenAI 요약 요청에 실패했습니다.", 502); }
+      if (!response.ok) { console.warn("[summarize] OpenAI upstream status", response.status); return errorResponse("api_error", upstreamError("OpenAI", response.status), 502); }
       text = payload?.output_text || "";
     } else if (provider === "gemini") {
       response = await fetch(GEMINI_URL, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseFormat: { text: { mimeType: "APPLICATION_JSON", schema } } } }), signal: controller.signal });
       const payload = await response.json().catch(() => null) as { error?: { message?: string }; candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> } | null;
       if (response.status === 401 || response.status === 403) return errorResponse("auth_error", "Gemini API 인증에 실패했습니다.", 502);
-      if (!response.ok) { console.warn("[summarize] Gemini upstream status", response.status, payload?.error?.message || "unknown error"); return errorResponse("api_error", "Gemini 요약 요청에 실패했습니다.", 502); }
+      if (!response.ok) { console.warn("[summarize] Gemini upstream status", response.status, payload?.error?.message || "unknown error"); return errorResponse("api_error", upstreamError("Gemini", response.status), 502); }
       text = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "";
     } else {
       response = await fetch(ANTHROPIC_URL, { method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" }, body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514", max_tokens: 700, messages: [{ role: "user", content: prompt }] }), signal: controller.signal });
       const payload = await response.json().catch(() => null) as { content?: Array<{ text?: string }> } | null;
       if (response.status === 401 || response.status === 403) return errorResponse("auth_error", "Claude API 인증에 실패했습니다.", 502);
-      if (!response.ok) { console.warn("[summarize] Claude upstream status", response.status); return errorResponse("api_error", "Claude 요약 요청에 실패했습니다.", 502); }
+      if (!response.ok) { console.warn("[summarize] Claude upstream status", response.status); return errorResponse("api_error", upstreamError("Claude", response.status), 502); }
       text = payload?.content?.map((item) => item.text || "").join("") || "";
     }
     return Response.json({ summary: parseJson(text) });
