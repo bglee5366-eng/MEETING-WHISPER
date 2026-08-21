@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export const ROLLING_BUFFER_LIMIT_MS = 2 * 60 * 1000;
+export const ROLLING_BUFFER_LIMIT_MINUTES = 10;
+export const ROLLING_BUFFER_LIMIT_SECONDS = ROLLING_BUFFER_LIMIT_MINUTES * 60;
+export const ROLLING_BUFFER_LIMIT_MS = ROLLING_BUFFER_LIMIT_SECONDS * 1000;
 const CHUNK_INTERVAL_MS = 1000;
 
 export type RecordingState = "idle" | "recording" | "paused";
@@ -93,7 +95,7 @@ export function useRollingAudioBuffer() {
     setRecording("idle");
     recordingStartedAtRef.current = null;
   }, [clearAudioData, releaseMicrophone]);
-  const getRecentTwoMinutesAudio = useCallback(() => {
+  const getRecentRollingBufferAudio = useCallback(() => {
     if (!chunksRef.current.length) return null;
     return new Blob(chunksRef.current.map((chunk) => chunk.blob), { type: chunksRef.current[0].blob.type || "audio/webm" });
   }, []);
@@ -117,5 +119,5 @@ export function useRollingAudioBuffer() {
     chunksRef.current = [];
   }, [releaseMicrophone]);
 
-  return { recording, microphonePermission, audioChunks, rollingBuffer, recordingDuration, error, startRecording, pauseRecording, resumeRecording, stopRecording, getRecentTwoMinutesAudio, clearAudioData };
+  return { recording, microphonePermission, audioChunks, rollingBuffer, recordingDuration, error, startRecording, pauseRecording, resumeRecording, stopRecording, getRecentRollingBufferAudio, clearAudioData };
 }

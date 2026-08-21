@@ -6,7 +6,7 @@ const schema = { type: "object", additionalProperties: false, properties: { core
 const fallback = { core: "현재 대화만으로는 판단하기 어렵습니다.", issues: "현재 대화만으로는 판단하기 어렵습니다.", speakingPoint: "현재 대화만으로는 판단하기 어렵습니다.", question: "", decision: "", numbers: [] as string[] };
 
 function errorResponse(code: string, message: string, status: number) { return Response.json({ error: { code, message } }, { status }); }
-function promptFor(transcript: string) { return `너는 회의에 참석했지만 잠시 집중하지 못한 사람을 위한 "회의 멍때리기 방지 요약기"다. 사용자는 지금 갑자기 "OO님 의견은요?"라는 질문을 받을 수 있다. 일반적인 회의록을 작성하지 말고 직전 2분간의 대화를 빠르게 따라잡을 수 있는 3줄 컨닝페이퍼를 만들어라.
+function promptFor(transcript: string) { return `너는 회의에 참석했지만 잠시 집중하지 못한 사람을 위한 "회의 멍때리기 방지 요약기"다. 사용자는 지금 갑자기 "OO님 의견은요?"라는 질문을 받을 수 있다. 일반적인 회의록을 작성하지 말고 직전 10분간의 대화를 빠르게 따라잡을 수 있는 3줄 컨닝페이퍼를 만들어라.
 
 반드시 JSON 객체만 반환하라. 스키마는 다음과 같다:
 {"core":"지금 논의한 핵심","issues":"주요 쟁점","speakingPoint":"내가 말할 때 참고할 포인트","question":"현재 나에게 직접 질문된 내용이 있다면 질문","decision":"방금 논의에서 결정된 내용","numbers":["중요 숫자 또는 일정"]}
