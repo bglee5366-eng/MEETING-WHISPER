@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { MAX_AUDIO_UPLOAD_BYTES, ROLLING_BUFFER_LIMIT_MINUTES, ROLLING_BUFFER_LIMIT_SECONDS, useRollingAudioBuffer } from "@/hooks/useRollingAudioBuffer";
+import { useRealtimeTranscript } from "@/hooks/useRealtimeTranscript";
+import RealtimeTranscript from "@/components/RealtimeTranscript";
 
 type TranscriptionStatus = "idle" | "analyzing" | "transcribing" | "success" | "error";
 type SummaryStatus = "idle" | "summarizing" | "success" | "error";
@@ -10,13 +12,13 @@ type Provider = "openai" | "gemini" | "anthropic";
 type SummaryResult = { core: string; issues: string; speakingPoint: string; question: string; decision: string; numbers: string[] };
 
 const exampleSummary: SummaryResult = { core: "내년도 사업은 AI 데이터 확보와 실증을 중심으로 추진하는 방향입니다.", issues: "데이터 확보 비용과 기관 간 데이터 공유 방식이 아직 정리되지 않았습니다.", speakingPoint: "실증사업과 연계해 실제 데이터를 확보하는 방안을 제안하면 좋습니다.", question: "", decision: "", numbers: [] };
-const transcript = [["김서준", "내년도 사업은 AI 데이터 확보와 실증을 중심으로 잡아보면 어떨까요?"], ["박지은", "방향은 좋은데, 데이터 확보 비용이 예상보다 커질 수 있습니다."], ["최현우", "기관 간 데이터 공유 방식도 사전에 정리해야 실증 일정에 맞출 수 있어요."], ["김서준", "그럼 실증사업과 연계해서 실제 데이터를 먼저 확보하는 안을 검토하겠습니다."]];
 const errorMessages: Record<string, string> = { no_api_key: "API 키 없음: 선택한 provider의 서버 환경변수를 설정해 주세요.", no_audio: "마이크 데이터 없음: 먼저 녹음을 시작하고 음성이 저장될 때까지 기다려 주세요.", auth_error: "API 인증 오류: provider API 키가 올바른지 확인해 주세요.", api_error: "API 호출 실패: AI 요청이 실패했습니다.", network_error: "네트워크 오류: AI 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.", invalid_request: "요청할 회의 원문이 없습니다.", insufficient_context: "회의 내용이 충분하지 않아 답변을 추천하기 어렵습니다.", unclear_context: "회의 내용이 불명확해 답변을 추천하기 어렵습니다.", audio_too_large: "음성 데이터가 Vercel 전송 한도를 초과했습니다. 녹음을 종료하고 새로 시작해 주세요." };
 function formatTime(seconds: number) { return `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`; }
 function formatBytes(bytes: number) { return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`; }
 
 export default function MeetingDashboard() {
   const { recording, microphonePermission, audioChunks, rollingBuffer, recordingDuration, error, startRecording, pauseRecording, resumeRecording, stopRecording, getRecentRollingBufferAudio } = useRollingAudioBuffer();
+  const realtimeTranscript = useRealtimeTranscript(recording === "recording", recording === "paused");
   const [isEmergency, setIsEmergency] = useState(false); const [whisperMode, setWhisperMode] = useState(false); const [rescueStep, setRescueStep] = useState(0); const [blobMessage, setBlobMessage] = useState("");
   const [transcriptionStatus, setTranscriptionStatus] = useState<TranscriptionStatus>("idle"); const [transcriptionText, setTranscriptionText] = useState(""); const [transcriptionError, setTranscriptionError] = useState("");
   const [provider, setProvider] = useState<Provider>("openai"); const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>("idle"); const [summary, setSummary] = useState<SummaryResult | null>(null); const [summaryError, setSummaryError] = useState("");
@@ -34,7 +36,13 @@ export default function MeetingDashboard() {
   };
 
   const rescueNow = async () => {
+    const realtimeText = realtimeTranscript.finalText.trim();
     const recentAudio = getRecentRollingBufferAudio(); setIsEmergency(true); setWhisperMode(false); setRescueStep(1); setTranscriptionError(""); setSummaryError(""); setReplyError(""); setReply(""); setSummary(null); setTranscriptionText(""); setReplyStatus("idle");
+    if (realtimeText.length >= 20) {
+      setTranscriptionText(realtimeText); setTranscriptionStatus("success"); setBlobMessage(`최근 ${ROLLING_BUFFER_LIMIT_MINUTES}분 확정 전사를 사용합니다.`);
+      const success = await summarizeTranscript(realtimeText, provider); if (success) { setRescueStep(4); setWhisperMode(true); }
+      return;
+    }
     if (!recentAudio) { setTranscriptionStatus("error"); setRescueStep(0); setBlobMessage("아직 저장된 음성이 없습니다."); setTranscriptionError(errorMessages.no_audio); return; }
     if (recentAudio.size > MAX_AUDIO_UPLOAD_BYTES) { setTranscriptionStatus("error"); setRescueStep(0); setBlobMessage(`현재 음성 Blob ${formatBytes(recentAudio.size)} · Vercel 전송 한도 초과`); setTranscriptionError(errorMessages.audio_too_large); return; }
     setBlobMessage(`최근 음성 Blob 준비 완료 · ${formatBytes(recentAudio.size)} · 서버에 자동 업로드하지 않았습니다.`); setTranscriptionStatus("analyzing"); await new Promise((resolve) => window.setTimeout(resolve, 250)); setRescueStep(2); setTranscriptionStatus("transcribing");
@@ -64,7 +72,7 @@ export default function MeetingDashboard() {
     <section className={`summary-card ${isEmergency ? "emergency" : ""}`}><div className="summary-heading"><div><p className="eyebrow">QUICK RESCUE</p><h2>갑자기 지목됐다면?</h2></div><span className="sparkle">✦</span></div><button className="rescue-button" onClick={rescueNow} disabled={transcriptionStatus === "analyzing" || transcriptionStatus === "transcribing" || summaryStatus === "summarizing"}><span>✦</span> 지금 살려줘!</button><p className="summary-hint">전사 후 선택한 provider가 3줄 컨닝페이퍼를 만듭니다.</p>{stageLabel && <p className="rescue-stage" role="status">{stageLabel}</p>}{summaryLabel && <p className="transcription-status success" role="status">{summaryLabel}</p>}{blobMessage && <p className="blob-message" role="status">{blobMessage}</p>}{transcriptionError && <p className="transcription-error" role="alert">{transcriptionError}</p>}{summaryError && <p className="transcription-error" role="alert">{summaryError}</p>}</section>
     <section className="results" aria-live="polite"><div className="results-header"><div><p className="eyebrow">WHISPER NOTES</p><h2>{summaryStatus === "success" ? "지금 바로 이렇게 말해보세요" : "요약 결과"}</h2></div><div className="results-tools"><span className="result-time">{summaryStatus === "success" ? "AI 요약 결과" : "예시 데이터"}</span>{summaryStatus === "success" && <button className="whisper-toggle" onClick={() => setWhisperMode(true)}>귓속말 모드</button>}</div></div><div className="result-grid"><article className="result-item"><span className="number">01</span><div><h3>지금 논의한 핵심</h3><p>{visibleSummary.core}</p></div></article><article className="result-item"><span className="number">02</span><div><h3>주요 쟁점</h3><p>{visibleSummary.issues}</p></div></article><article className="result-item highlight"><span className="number">03</span><div><h3>내가 말할 때 참고할 포인트</h3><p>{visibleSummary.speakingPoint}</p></div></article></div>{summaryStatus === "success" && <div className="reply-panel"><button className="button reply-button" onClick={generateReply} disabled={replyStatus === "generating"}>✦ 한마디 만들어줘</button>{replyStatus === "generating" && <span className="reply-status">자연스러운 한마디를 고르는 중...</span>}{reply && <p className="reply-text">“{reply}”</p>}{replyError && <p className="transcription-error" role="alert">{replyError}</p>}</div>}{(summaryStatus === "success" || transcriptionText) && <div className="result-actions"><button className="button primary" onClick={() => transcriptionText && summarizeTranscript(transcriptionText, provider)} disabled={!transcriptionText || summaryStatus === "summarizing"}>↻ 다시 요약</button>{reply && <button className="button ghost" onClick={speakWhisper}>🔊 귓속말로 읽어줘</button>}<button className="button ghost" onClick={clearResults}>× 결과 지우기</button></div>}</section>
     <section className="whisper-panel" aria-label="귓속말 모드"><div className="whisper-top"><span className="eyebrow">WHISPER MODE · 지금 바로 확인</span><button className="whisper-exit" onClick={() => setWhisperMode(false)}>일반 화면</button></div><p className="whisper-question">[OO님 의견은요?]</p><div className="whisper-lines"><div><span>① 무슨 얘기?</span><strong>{visibleSummary.core}</strong></div><div><span>② 뭐가 쟁점?</span><strong>{visibleSummary.issues}</strong></div><div><span>③ 나는 뭐라고 하지?</span><strong>{reply || visibleSummary.speakingPoint}</strong></div></div><div className="whisper-actions"><button className="button reply-button" onClick={generateReply} disabled={replyStatus === "generating"}>✦ {replyStatus === "generating" ? "한마디 고르는 중..." : "한마디 만들어줘"}</button>{reply && <button className="button ghost" onClick={speakWhisper}>🔊 귓속말로 읽어줘</button>}</div>{replyError && <p className="transcription-error" role="alert">{replyError}</p>}</section>
-    <details className="transcript" open={Boolean(transcriptionText || transcriptionError)}><summary><span><b>원문 보기</b><small>{transcriptionText ? `최근 ${ROLLING_BUFFER_LIMIT_MINUTES}분 전사 결과` : `최근 ${ROLLING_BUFFER_LIMIT_MINUTES}분 대화 내용`}</small></span><span className="chevron">⌄</span></summary><div className="transcript-body">{transcriptionText ? <p className="transcription-text">{transcriptionText}</p> : transcriptionError ? <p className="transcription-empty">{transcriptionError}</p> : transcript.map(([speaker, text], index) => <p key={index}><b>{speaker}</b><span>{text}</span></p>)}</div></details>
+    <RealtimeTranscript segments={realtimeTranscript.segments} interimTranscript={realtimeTranscript.interimTranscript} status={realtimeTranscript.status} error={realtimeTranscript.error} />
     <footer><span>●</span> 음성 데이터는 서버에 자동 업로드되지 않으며, 녹음 종료 시 삭제됩니다.</footer>
   </main>;
 }
