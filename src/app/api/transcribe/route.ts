@@ -1,6 +1,6 @@
 const OPENAI_TRANSCRIPTION_URL = "https://api.openai.com/v1/audio/transcriptions";
 const TRANSCRIPTION_TIMEOUT_MS = 30_000;
-const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
 const ALLOWED_AUDIO_TYPES = new Set(["audio/webm", "audio/ogg", "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp3", "audio/mp4", "audio/x-m4a", "audio/flac"]);
 export const runtime = "nodejs";
 
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
   const audio = formData.get("audio");
   if (!(audio instanceof File) || audio.size === 0) return errorResponse("no_audio", "전사할 마이크 데이터가 없습니다.", 400);
-  if (audio.size > MAX_AUDIO_BYTES) return errorResponse("invalid_audio_format", "음성 파일이 너무 큽니다. 최근 10분 음성만 다시 시도해 주세요.", 413);
+  if (audio.size > MAX_AUDIO_BYTES) return errorResponse("invalid_audio_format", "음성 파일이 Vercel 전송 한도보다 큽니다. 녹음을 종료하고 낮은 용량으로 다시 시작해 주세요.", 413);
   if (audio.type && !ALLOWED_AUDIO_TYPES.has(audio.type.split(";")[0])) return errorResponse("invalid_audio_format", "지원하지 않는 음성 파일 형식입니다.", 415);
 
   const controller = new AbortController();

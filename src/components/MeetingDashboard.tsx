@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ROLLING_BUFFER_LIMIT_MINUTES, ROLLING_BUFFER_LIMIT_SECONDS, useRollingAudioBuffer } from "@/hooks/useRollingAudioBuffer";
+import { MAX_AUDIO_UPLOAD_BYTES, ROLLING_BUFFER_LIMIT_MINUTES, ROLLING_BUFFER_LIMIT_SECONDS, useRollingAudioBuffer } from "@/hooks/useRollingAudioBuffer";
 
 type TranscriptionStatus = "idle" | "analyzing" | "transcribing" | "success" | "error";
 type SummaryStatus = "idle" | "summarizing" | "success" | "error";
@@ -11,7 +11,7 @@ type SummaryResult = { core: string; issues: string; speakingPoint: string; ques
 
 const exampleSummary: SummaryResult = { core: "내년도 사업은 AI 데이터 확보와 실증을 중심으로 추진하는 방향입니다.", issues: "데이터 확보 비용과 기관 간 데이터 공유 방식이 아직 정리되지 않았습니다.", speakingPoint: "실증사업과 연계해 실제 데이터를 확보하는 방안을 제안하면 좋습니다.", question: "", decision: "", numbers: [] };
 const transcript = [["김서준", "내년도 사업은 AI 데이터 확보와 실증을 중심으로 잡아보면 어떨까요?"], ["박지은", "방향은 좋은데, 데이터 확보 비용이 예상보다 커질 수 있습니다."], ["최현우", "기관 간 데이터 공유 방식도 사전에 정리해야 실증 일정에 맞출 수 있어요."], ["김서준", "그럼 실증사업과 연계해서 실제 데이터를 먼저 확보하는 안을 검토하겠습니다."]];
-const errorMessages: Record<string, string> = { no_api_key: "API 키 없음: 선택한 provider의 서버 환경변수를 설정해 주세요.", no_audio: "마이크 데이터 없음: 먼저 녹음을 시작하고 음성이 저장될 때까지 기다려 주세요.", auth_error: "API 인증 오류: provider API 키가 올바른지 확인해 주세요.", api_error: "API 호출 실패: AI 요청이 실패했습니다.", network_error: "네트워크 오류: AI 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.", invalid_request: "요청할 회의 원문이 없습니다.", insufficient_context: "회의 내용이 충분하지 않아 답변을 추천하기 어렵습니다.", unclear_context: "회의 내용이 불명확해 답변을 추천하기 어렵습니다." };
+const errorMessages: Record<string, string> = { no_api_key: "API 키 없음: 선택한 provider의 서버 환경변수를 설정해 주세요.", no_audio: "마이크 데이터 없음: 먼저 녹음을 시작하고 음성이 저장될 때까지 기다려 주세요.", auth_error: "API 인증 오류: provider API 키가 올바른지 확인해 주세요.", api_error: "API 호출 실패: AI 요청이 실패했습니다.", network_error: "네트워크 오류: AI 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.", invalid_request: "요청할 회의 원문이 없습니다.", insufficient_context: "회의 내용이 충분하지 않아 답변을 추천하기 어렵습니다.", unclear_context: "회의 내용이 불명확해 답변을 추천하기 어렵습니다.", audio_too_large: "음성 데이터가 Vercel 전송 한도를 초과했습니다. 녹음을 종료하고 새로 시작해 주세요." };
 function formatTime(seconds: number) { return `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`; }
 function formatBytes(bytes: number) { return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`; }
 
@@ -36,6 +36,7 @@ export default function MeetingDashboard() {
   const rescueNow = async () => {
     const recentAudio = getRecentRollingBufferAudio(); setIsEmergency(true); setWhisperMode(false); setRescueStep(1); setTranscriptionError(""); setSummaryError(""); setReplyError(""); setReply(""); setSummary(null); setTranscriptionText(""); setReplyStatus("idle");
     if (!recentAudio) { setTranscriptionStatus("error"); setRescueStep(0); setBlobMessage("아직 저장된 음성이 없습니다."); setTranscriptionError(errorMessages.no_audio); return; }
+    if (recentAudio.size > MAX_AUDIO_UPLOAD_BYTES) { setTranscriptionStatus("error"); setRescueStep(0); setBlobMessage(`현재 음성 Blob ${formatBytes(recentAudio.size)} · Vercel 전송 한도 초과`); setTranscriptionError(errorMessages.audio_too_large); return; }
     setBlobMessage(`최근 음성 Blob 준비 완료 · ${formatBytes(recentAudio.size)} · 서버에 자동 업로드하지 않았습니다.`); setTranscriptionStatus("analyzing"); await new Promise((resolve) => window.setTimeout(resolve, 250)); setRescueStep(2); setTranscriptionStatus("transcribing");
     const formData = new FormData(); formData.append("audio", new File([recentAudio], "meeting.webm", { type: recentAudio.type || "audio/webm" })); formData.append("provider", provider === "gemini" ? "gemini" : "openai"); const controller = new AbortController(); const timeout = window.setTimeout(() => controller.abort(), 35_000);
     try { const response = await fetch("/api/transcribe", { method: "POST", body: formData, signal: controller.signal }); const payload = await response.json().catch(() => null) as { text?: unknown; error?: { code?: string; message?: string } } | null;

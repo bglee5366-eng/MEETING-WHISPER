@@ -5,7 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export const ROLLING_BUFFER_LIMIT_MINUTES = 10;
 export const ROLLING_BUFFER_LIMIT_SECONDS = ROLLING_BUFFER_LIMIT_MINUTES * 60;
 export const ROLLING_BUFFER_LIMIT_MS = ROLLING_BUFFER_LIMIT_SECONDS * 1000;
+export const MAX_AUDIO_UPLOAD_BYTES = 4 * 1024 * 1024;
 const CHUNK_INTERVAL_MS = 1000;
+const AUDIO_BITRATE = 32_000;
 
 export type RecordingState = "idle" | "recording" | "paused";
 export type MicrophonePermission = "unknown" | "requesting" | "granted" | "denied" | "unsupported";
@@ -58,12 +60,12 @@ export function useRollingAudioBuffer() {
     }
     try {
       setMicrophonePermission("requesting");
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16_000, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       streamRef.current = stream;
       setMicrophonePermission("granted");
       clearAudioData();
       const mimeType = getSupportedMimeType();
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: AUDIO_BITRATE } : { audioBitsPerSecond: AUDIO_BITRATE });
       recorderRef.current = recorder;
       recorder.ondataavailable = (event) => addChunk(event.data);
       recorder.onerror = () => setError("녹음 중 문제가 발생했습니다. 마이크 권한과 브라우저 상태를 확인해 주세요.");
