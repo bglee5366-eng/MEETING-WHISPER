@@ -8,10 +8,11 @@ export const ROLLING_BUFFER_LIMIT_MS = ROLLING_BUFFER_LIMIT_SECONDS * 1000;
 export const MAX_AUDIO_UPLOAD_BYTES = 4 * 1024 * 1024;
 const CHUNK_INTERVAL_MS = 1000;
 const AUDIO_BITRATE = 32_000;
+const RECORDER_SEGMENT_INTERVAL_MS = 9 * 60 * 1000;
 
 export type RecordingState = "idle" | "recording" | "paused";
 export type MicrophonePermission = "unknown" | "requesting" | "granted" | "denied" | "unsupported";
-export type AudioChunk = { blob: Blob; timestamp: number; durationMs: number };
+export type AudioChunk = { blob: Blob; timestamp: number; durationMs: number; segmentId: number };
 
 function getSupportedMimeType() {
   if (typeof MediaRecorder === "undefined") return "";
@@ -29,6 +30,10 @@ export function useRollingAudioBuffer() {
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<AudioChunk[]>([]);
   const recordingStartedAtRef = useRef<number | null>(null);
+  const recordingStateRef = useRef<RecordingState>("idle");
+  const segmentIdRef = useRef(0);
+  const rotatingRef = useRef(false);
+  const startRecorderRef = useRef<(stream: MediaStream, segmentId: number) => void>(() => undefined);
 
   const clearAudioData = useCallback(() => {
     chunksRef.current = [];
@@ -41,16 +46,31 @@ export function useRollingAudioBuffer() {
     streamRef.current = null;
     recorderRef.current = null;
   }, []);
-  const addChunk = useCallback((blob: Blob) => {
+  const addChunk = useCallback((blob: Blob, segmentId = segmentIdRef.current) => {
     if (!blob.size) return;
     const now = Date.now();
-    const nextChunks = [...chunksRef.current, { blob, timestamp: now, durationMs: CHUNK_INTERVAL_MS }];
+    const nextChunks = [...chunksRef.current, { blob, timestamp: now, durationMs: CHUNK_INTERVAL_MS, segmentId }];
     const recentChunks = nextChunks.filter((chunk) => chunk.timestamp > now - ROLLING_BUFFER_LIMIT_MS);
     chunksRef.current = recentChunks;
     setAudioChunks(recentChunks);
     setRollingBuffer(recentChunks);
   }, []);
 
+  const startRecorder = useCallback((stream: MediaStream, segmentId: number) => {
+    const mimeType = getSupportedMimeType();
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: AUDIO_BITRATE } : { audioBitsPerSecond: AUDIO_BITRATE });
+    recorderRef.current = recorder;
+    recorder.ondataavailable = (event) => addChunk(event.data, segmentId);
+    recorder.onerror = () => setError("녹음 중 문제가 발생했습니다. 마이크 권한과 브라우저 상태를 확인해 주세요.");
+    recorder.onstop = () => {
+      if (rotatingRef.current && recordingStateRef.current !== "idle" && streamRef.current === stream) {
+        rotatingRef.current = false;
+        segmentIdRef.current = segmentId + 1;
+        startRecorderRef.current(stream, segmentId + 1);
+      }
+    };
+    recorder.start(CHUNK_INTERVAL_MS);
+  }, [addChunk]);
   const startRecording = useCallback(async () => {
     setError("");
     if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
@@ -64,28 +84,28 @@ export function useRollingAudioBuffer() {
       streamRef.current = stream;
       setMicrophonePermission("granted");
       clearAudioData();
-      const mimeType = getSupportedMimeType();
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: AUDIO_BITRATE } : { audioBitsPerSecond: AUDIO_BITRATE });
-      recorderRef.current = recorder;
-      recorder.ondataavailable = (event) => addChunk(event.data);
-      recorder.onerror = () => setError("녹음 중 문제가 발생했습니다. 마이크 권한과 브라우저 상태를 확인해 주세요.");
-      recorder.start(CHUNK_INTERVAL_MS);
+      segmentIdRef.current = 0;
+      rotatingRef.current = false;
+      startRecorderRef.current(stream, 0);
       recordingStartedAtRef.current = Date.now();
+      recordingStateRef.current = "recording";
       setRecording("recording");
     } catch (cause) {
       releaseMicrophone();
       setMicrophonePermission("denied");
       setError(cause instanceof DOMException && cause.name === "NotAllowedError" ? "마이크 권한이 거부되었습니다. 브라우저 주소창의 마이크 아이콘에서 권한을 허용한 뒤 다시 시도해 주세요." : "마이크를 시작할 수 없습니다. 연결된 마이크와 브라우저 권한을 확인해 주세요.");
     }
-  }, [addChunk, clearAudioData, releaseMicrophone]);
+  }, [clearAudioData, releaseMicrophone]);
   const pauseRecording = useCallback(() => {
-    if (recorderRef.current?.state === "recording") { recorderRef.current.pause(); setRecording("paused"); }
+    if (recorderRef.current?.state === "recording") { recorderRef.current.pause(); recordingStateRef.current = "paused"; setRecording("paused"); }
   }, []);
   const resumeRecording = useCallback(() => {
-    if (recorderRef.current?.state === "paused") { recorderRef.current.resume(); setRecording("recording"); }
+    if (recorderRef.current?.state === "paused") { recorderRef.current.resume(); recordingStateRef.current = "recording"; setRecording("recording"); }
   }, []);
   const stopRecording = useCallback(() => {
     const recorder = recorderRef.current;
+    recordingStateRef.current = "idle";
+    rotatingRef.current = false;
     const clearAfterStop = () => clearAudioData();
     if (recorder && recorder.state !== "inactive") {
       recorder.addEventListener("stop", clearAfterStop, { once: true });
@@ -99,9 +119,28 @@ export function useRollingAudioBuffer() {
   }, [clearAudioData, releaseMicrophone]);
   const getRecentRollingBufferAudio = useCallback(() => {
     if (!chunksRef.current.length) return null;
-    return new Blob(chunksRef.current.map((chunk) => chunk.blob), { type: chunksRef.current[0].blob.type || "audio/webm" });
+    const currentSegment = chunksRef.current.filter((chunk) => chunk.segmentId === segmentIdRef.current);
+    const chunks = currentSegment.length ? currentSegment : chunksRef.current;
+    return new Blob(chunks.map((chunk) => chunk.blob), { type: (chunks[0].blob.type || "audio/webm").split(";")[0] });
   }, []);
 
+  useEffect(() => {
+    startRecorderRef.current = startRecorder;
+  }, [startRecorder]);
+  useEffect(() => {
+    recordingStateRef.current = recording;
+  }, [recording]);
+  useEffect(() => {
+    if (recording !== "recording") return;
+    const segmentTimer = window.setInterval(() => {
+      const recorder = recorderRef.current;
+      if (!recorder || recorder.state !== "recording" || rotatingRef.current) return;
+      rotatingRef.current = true;
+      recorder.requestData();
+      recorder.stop();
+    }, RECORDER_SEGMENT_INTERVAL_MS);
+    return () => window.clearInterval(segmentTimer);
+  }, [recording]);
   useEffect(() => {
     if (!navigator.permissions?.query) return;
     navigator.permissions.query({ name: "microphone" as PermissionName }).then((permission) => {
