@@ -77,7 +77,9 @@ export function useRealtimeTranscript(isRecording: boolean, isPaused: boolean) {
     setStatus("transcribing");
     const recognition = new Recognition();
     recognition.lang = "ko-KR";
-    recognition.continuous = true;
+    // 짧은 발화 단위로 확정한 뒤 자동 재시작하면 장시간 연속 인식의
+    // 브라우저 서비스 제한으로 한 번에 단어만 확정되는 현상을 줄일 수 있다.
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.onresult = (event) => {
       restartAttemptsRef.current = 0;

@@ -10,6 +10,7 @@ type SummaryStatus = "idle" | "summarizing" | "success" | "error";
 type ReplyStatus = "idle" | "generating" | "success" | "error";
 type Provider = "openai" | "gemini" | "anthropic";
 type SummaryResult = { core: string; issues: string; speakingPoint: string; question: string; decision: string; numbers: string[] };
+const MIN_RELIABLE_REALTIME_TEXT_LENGTH = 120;
 
 const exampleSummary: SummaryResult = { core: "내년도 사업은 AI 데이터 확보와 실증을 중심으로 추진하는 방향입니다.", issues: "데이터 확보 비용과 기관 간 데이터 공유 방식이 아직 정리되지 않았습니다.", speakingPoint: "실증사업과 연계해 실제 데이터를 확보하는 방안을 제안하면 좋습니다.", question: "", decision: "", numbers: [] };
 const errorMessages: Record<string, string> = { no_api_key: "API 키 없음: 선택한 provider의 서버 환경변수를 설정해 주세요.", no_audio: "마이크 데이터 없음: 먼저 녹음을 시작하고 음성이 저장될 때까지 기다려 주세요.", auth_error: "API 인증 오류: provider API 키가 올바른지 확인해 주세요.", api_error: "API 호출 실패: AI 요청이 실패했습니다.", network_error: "네트워크 오류: AI 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.", invalid_request: "요청할 회의 원문이 없습니다.", insufficient_context: "회의 내용이 충분하지 않아 답변을 추천하기 어렵습니다.", unclear_context: "회의 내용이 불명확해 답변을 추천하기 어렵습니다.", audio_too_large: "음성 데이터가 Vercel 전송 한도를 초과했습니다. 녹음을 종료하고 새로 시작해 주세요." };
@@ -39,15 +40,16 @@ export default function MeetingDashboard() {
 
   const rescueNow = async () => {
     const realtimeText = realtimeTranscript.finalText.trim();
+    const hasReliableRealtimeText = realtimeTranscript.segments.length >= 2 && realtimeText.length >= MIN_RELIABLE_REALTIME_TEXT_LENGTH;
     const recentAudio = getRecentRollingBufferAudio(); setIsEmergency(true); setWhisperMode(false); setRescueStep(1); setTranscriptionError(""); setSummaryError(""); setReplyError(""); setReply(""); setSummary(null); setTranscriptionText(""); setReplyStatus("idle");
-    if (realtimeText.length >= 20) {
+    if (hasReliableRealtimeText) {
       setTranscriptionText(realtimeText); setTranscriptionStatus("success"); setBlobMessage(`최근 ${ROLLING_BUFFER_LIMIT_MINUTES}분 확정 전사를 사용합니다.`);
       const success = await summarizeTranscript(realtimeText, provider); if (success) { setRescueStep(4); setWhisperMode(true); }
       return;
     }
     if (!recentAudio) { setTranscriptionStatus("error"); setRescueStep(0); setBlobMessage("아직 저장된 음성이 없습니다."); setTranscriptionError(errorMessages.no_audio); return; }
     if (recentAudio.size > MAX_AUDIO_UPLOAD_BYTES) { setTranscriptionStatus("error"); setRescueStep(0); setBlobMessage(`현재 음성 Blob ${formatBytes(recentAudio.size)} · Vercel 전송 한도 초과`); setTranscriptionError(errorMessages.audio_too_large); return; }
-    setBlobMessage(`최근 음성 Blob 준비 완료 · ${formatBytes(recentAudio.size)} · 서버에 자동 업로드하지 않았습니다.`); setTranscriptionStatus("analyzing"); await new Promise((resolve) => window.setTimeout(resolve, 250)); setRescueStep(2); setTranscriptionStatus("transcribing");
+    setBlobMessage(`${realtimeText ? "실시간 전사 내용이 짧아" : "실시간 확정 전사가 없어"} 최근 음성 Blob으로 다시 파악합니다 · ${formatBytes(recentAudio.size)} · 서버에 자동 업로드하지 않았습니다.`); setTranscriptionStatus("analyzing"); await new Promise((resolve) => window.setTimeout(resolve, 250)); setRescueStep(2); setTranscriptionStatus("transcribing");
     const formData = new FormData(); formData.append("audio", new File([recentAudio], "meeting.webm", { type: recentAudio.type || "audio/webm" })); formData.append("provider", provider === "gemini" ? "gemini" : "openai"); const controller = new AbortController(); const timeout = window.setTimeout(() => controller.abort(), 35_000);
     try { const response = await fetch("/api/transcribe", { method: "POST", body: formData, signal: controller.signal }); const payload = await response.json().catch(() => null) as { text?: unknown; error?: { code?: string; message?: string } } | null;
       if (!response.ok) { setTranscriptionStatus("error"); setTranscriptionError(payload?.error?.message || errorMessages[payload?.error?.code || "api_error"] || errorMessages.api_error); return; }

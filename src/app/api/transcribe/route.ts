@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({ contents: [{ parts: [{ text: "회의 음성을 한국어 원문 그대로 정확하게 전사해 주세요. 설명이나 요약 없이 말한 내용만 반환하세요." }, { inlineData: { mimeType: (audio.type || "audio/webm").split(";")[0], data: base64Audio } }] }] }),
+        body: JSON.stringify({ contents: [{ parts: [{ text: "회의 음성을 한국어 원문 그대로 빠짐없이 전사해 주세요. 요약하거나 핵심 단어만 뽑지 말고, 들리는 모든 발화를 문장 단위로 반환하세요. 화자 이름은 추측하지 말고, 설명이나 요약 없이 전사한 내용만 반환하세요." }, { inlineData: { mimeType: (audio.type || "audio/webm").split(";")[0], data: base64Audio } }] }] }),
         signal: controller.signal,
       });
       payload = await response.json().catch(() => null);
