@@ -23,6 +23,13 @@ export async function GET(_request: Request, context: Context) {
 export async function PATCH(request: Request, context: Context) {
   const supabase = createServerSupabaseClient(); if (!supabase) return unavailable();
   const { id } = await context.params; const body = await request.json().catch(() => ({}));
+  if (typeof body.title === "string") {
+    const title = body.title.trim().slice(0, 200);
+    if (!title) return NextResponse.json({ error: { code: "invalid_request", message: "회의 제목을 입력해 주세요." } }, { status: 400 });
+    const { data, error } = await supabase.from("meetings").update({ title }).eq("id", id).select("*").single();
+    if (error) return NextResponse.json({ error: { code: "supabase_error", message: "회의 제목을 저장하지 못했습니다." } }, { status: 502 });
+    return NextResponse.json({ meeting: data });
+  }
   const endedAt = typeof body.ended_at === "string" ? body.ended_at : new Date().toISOString();
   const duration = Number.isFinite(body.duration_seconds) ? Math.max(0, Math.round(body.duration_seconds)) : null;
   const { data, error } = await supabase.from("meetings").update({ ended_at: endedAt, duration_seconds: duration, status: "completed" }).eq("id", id).select("*").single();
