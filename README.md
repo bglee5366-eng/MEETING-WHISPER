@@ -70,3 +70,11 @@ Vercel Serverless Function의 요청 크기 제한을 고려해 음성은 전사
 실시간 전사는 Web Speech API 지원 여부에 따라 동작합니다. Chrome 또는 Edge의 일반 HTTPS 브라우저에서 `녹음 시작` 버튼으로 시작하는 것을 권장하며, 인앱 브라우저나 지원되지 않는 브라우저에서는 실시간 전사 대신 녹음 후 AI 전사 fallback을 사용합니다. Web Speech API는 브라우저에 따라 서버 기반 인식 서비스를 사용할 수 있습니다.
 
 녹음 종료 시 저장된 음성 chunk를 삭제하고, 페이지를 새로고침하거나 종료하면 브라우저 메모리의 데이터가 남지 않습니다. 실제 회의 음성을 전송하기 전에 참가자와 조직의 개인정보·녹음 정책을 확인하세요.
+
+## Supabase 저장 기능
+
+`@supabase/supabase-js`를 사용합니다. Supabase SQL Editor에서 `supabase/migrations/001_create_meeting_tables.sql`을 실행한 뒤 `.env.local`에 Supabase 환경변수를 설정하세요. 회의 세션, 확정 전사, 3줄 요약, 한마디 답변, 최종 회의록을 각각 저장하고 `/meetings`에서 다시 조회할 수 있습니다.
+
+브라우저는 공개 anon key만 사용하며 데이터 저장·조회는 Next.js Route Handler가 담당합니다. 로그인 기능이 없는 현재 버전에서 저장을 활성화하려면 `SUPABASE_SERVICE_ROLE_KEY`를 서버/Vercel 환경변수에만 등록해야 합니다. 외부 공개 서비스로 운영할 때는 Supabase Auth를 추가해 사용자별 데이터 접근을 분리해야 합니다.
+
+Supabase가 일시적으로 연결되지 않아도 녹음과 실시간 전사는 브라우저 메모리에서 계속 동작합니다. 다만 저장되지 않은 데이터는 페이지를 닫으면 사라질 수 있습니다. Rolling Buffer와 interim 전사는 DB에 계속 복제하지 않고, 확정된 전사와 사용자가 요청한 결과만 저장합니다.
