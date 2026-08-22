@@ -96,8 +96,8 @@ export function useRealtimeTranscript(isRecording: boolean, isPaused: boolean) {
     recognition.onerror = (event) => {
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
         activeRef.current = false;
-        setStatus("error");
-        setError("마이크 권한이 필요합니다.");
+        setStatus("unsupported");
+        setError("현재 브라우저에서는 실시간 전사를 지원하지 않습니다. 녹음 후 AI 전사 기능을 이용할 수 있습니다.");
       } else if (event.error === "network") {
         setStatus("error");
         setError("네트워크 연결을 확인해주세요.");
