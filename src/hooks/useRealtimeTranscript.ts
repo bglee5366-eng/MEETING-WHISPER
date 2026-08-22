@@ -130,7 +130,7 @@ export function useRealtimeTranscript(isRecording: boolean, isPaused: boolean) {
   useEffect(() => { startRef.current = start; }, [start]);
   useEffect(() => {
     const syncTimer = window.setTimeout(() => {
-      if (!isRecording) { stop(true); return; }
+      if (!isRecording) { if (activeRef.current) stop(false); return; }
       if (isPaused) { stop(false); return; }
       if (!activeRef.current) { restartAttemptsRef.current = 0; start(); }
     }, 0);
