@@ -38,7 +38,7 @@ export default function AutoStartControl({ open }: { open: boolean }) {
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
-    setHost(document.querySelector<HTMLElement>(".settings-popover"));
+    setHost(document.body);
     const savedTheme = localStorage.getItem("meeting-whisper-theme") as Theme | null;
     const savedProvider = localStorage.getItem("meeting-whisper-provider") as Provider | null;
     const savedFontSize = localStorage.getItem("meeting-whisper-font-size");
