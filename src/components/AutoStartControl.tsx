@@ -31,7 +31,7 @@ export default function AutoStartControl({ open }: { open: boolean }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [theme, setTheme] = useState<Theme>("system");
   const [provider, setProvider] = useState<Provider>("openai");
-  const [fontSize, setFontSize] = useState("3");
+  const [fontSize, setFontSize] = useState("1");
   const [autoRecord, setAutoRecord] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [section, setSection] = useState<Section>(null);
@@ -44,7 +44,7 @@ export default function AutoStartControl({ open }: { open: boolean }) {
     const savedFontSize = localStorage.getItem("meeting-whisper-font-size");
     setTheme(savedTheme === "system" || savedTheme === "light" || savedTheme === "dark" ? savedTheme : "system");
     setProvider(savedProvider === "openai" || savedProvider === "gemini" || savedProvider === "anthropic" ? savedProvider : "openai");
-    setFontSize(savedFontSize && fontSizes.some((item) => item.value === savedFontSize) ? savedFontSize : "3");
+    setFontSize(savedFontSize && fontSizes.some((item) => item.value === savedFontSize) ? savedFontSize : "1");
     setAutoRecord(localStorage.getItem("meeting-whisper-auto-record") === "true");
   }, [open]);
 
