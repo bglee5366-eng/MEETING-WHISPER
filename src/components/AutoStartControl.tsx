@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 
@@ -41,10 +41,13 @@ export default function AutoStartControl({ open }: { open: boolean }) {
     setHost(document.body);
     const savedTheme = localStorage.getItem("meeting-whisper-theme") as Theme | null;
     const savedProvider = localStorage.getItem("meeting-whisper-provider") as Provider | null;
-    const savedFontSize = localStorage.getItem("meeting-whisper-font-size");
+    const resetKey = "meeting-whisper-font-default-reset-v1";
+    const shouldResetFont = !localStorage.getItem(resetKey);
+    if (shouldResetFont) { localStorage.removeItem("meeting-whisper-font-size"); localStorage.setItem(resetKey, "true"); }
     setTheme(savedTheme === "system" || savedTheme === "light" || savedTheme === "dark" ? savedTheme : "system");
     setProvider(savedProvider === "openai" || savedProvider === "gemini" || savedProvider === "anthropic" ? savedProvider : "openai");
-    setFontSize(savedFontSize && fontSizes.some((item) => item.value === savedFontSize) ? savedFontSize : "1");
+    const currentFontSize = localStorage.getItem("meeting-whisper-font-size");
+    setFontSize(!shouldResetFont && currentFontSize && fontSizes.some((item) => item.value === currentFontSize) ? currentFontSize : "3");
     setAutoRecord(localStorage.getItem("meeting-whisper-auto-record") === "true");
   }, [open]);
 
@@ -60,6 +63,20 @@ export default function AutoStartControl({ open }: { open: boolean }) {
     document.documentElement.dataset.theme = theme;
     document.documentElement.dataset.fontSize = fontSize;
   }, [theme, fontSize]);
+
+  const settingsMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (settingsMenuRef.current && target && !settingsMenuRef.current.contains(target)) {
+        setSettingsOpen(false);
+        setSection(null);
+        setNotice("");
+      }
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, []);
 
   const chooseTheme = (next: Theme) => {
     setTheme(next);
@@ -103,7 +120,7 @@ export default function AutoStartControl({ open }: { open: boolean }) {
   );
 
   return createPortal(
-    <div className="chat-settings-menu">
+    <div className="chat-settings-menu" ref={settingsMenuRef}>
       <button className="chat-account-row" type="button" onClick={() => setNotice("현재 로그인 기능은 준비 중입니다.")}><span className="chat-account-avatar">MW</span><span className="chat-account-copy"><strong>Meeting Whisper</strong><small>Free plan</small></span><span className="chat-account-arrow">›</span></button>
       <div className="chat-settings-actions">
         <button type="button" className="chat-settings-action" onClick={() => setNotice("요금제 업그레이드 기능은 준비 중입니다.")}><span>✦</span>요금제 업그레이드</button>
