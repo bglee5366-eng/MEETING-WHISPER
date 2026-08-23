@@ -2,6 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { MAX_AUDIO_UPLOAD_BYTES, ROLLING_BUFFER_LIMIT_MINUTES, useRollingAudioBuffer } from "@/hooks/useRollingAudioBuffer";
 import { useRealtimeTranscript } from "@/hooks/useRealtimeTranscript";
 import RealtimeTranscript from "@/components/RealtimeTranscript";
@@ -22,6 +23,7 @@ function ProviderMark({ provider }: { provider: Provider }) { return <Image clas
 
 type SidebarProps = { open: boolean; mobileOpen: boolean; meetings: Meeting[]; projects: Project[]; activeId: string; searchOpen: boolean; search: string; settingsOpen: boolean; theme: Theme; onCollapse: () => void; onNew: () => void; onMobileClose: () => void; onSelect: (meeting: Meeting) => void; onRename: (meeting: Meeting, title: string) => void; onDelete: (meeting: Meeting) => void; onSearchOpen: () => void; onSearchChange: (value: string) => void; onSearch: () => void; onSettings: () => void; onTheme: (theme: Theme) => void; onProvider: (provider: Provider) => void };
 function Sidebar(props: SidebarProps) {
+  const router = useRouter();
   const [projectGroups, setProjectGroups] = useState<Record<string, string>>({});
   const [groupNames, setGroupNames] = useState<string[]>([]);
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -29,7 +31,8 @@ function Sidebar(props: SidebarProps) {
   const [groupManagerOpen, setGroupManagerOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   useEffect(() => { try { const savedGroups = JSON.parse(localStorage.getItem("meeting-whisper-project-groups") || "{}"); const savedNames = JSON.parse(localStorage.getItem("meeting-whisper-project-names") || "[]"); setProjectGroups(savedGroups); const databaseNames = props.projects.filter((project) => !project.archived && project.name !== "미분류").map((project) => project.name); setGroupNames(databaseNames.length ? databaseNames : savedNames); } catch { setProjectGroups({}); setGroupNames([]); } }, [props.meetings, props.projects]);
-  useEffect(() => { const close = () => setMenuId(null); document.addEventListener("click", close); return () => document.removeEventListener("click", close); }, []);
+  useEffect(() => { const close = (event: MouseEvent) => { const target = event.target as Element | null; if (!target?.closest(".meeting-more-button,.meeting-more-menu")) setMenuId(null); }; document.addEventListener("click", close); return () => document.removeEventListener("click", close); }, []);
+  useEffect(() => { const handlers: Array<[Element, EventListener]> = []; document.querySelectorAll<HTMLElement>(".meeting-group-label").forEach((element) => { const label = element.textContent?.trim() || ""; const project = props.projects.find((item) => item.name === label); if (!project) return; const handler: EventListener = (event) => { event.preventDefault(); event.stopPropagation(); router.push(`/projects/${project.id}`); }; element.setAttribute("role", "link"); element.setAttribute("tabindex", "0"); element.setAttribute("title", `${label} 프로젝트 열기`); element.addEventListener("click", handler); handlers.push([element, handler]); }); return () => handlers.forEach(([element, handler]) => element.removeEventListener("click", handler)); }, [props.projects, router]);
   const grouped = useMemo(() => { const map = new Map<string, Meeting[]>(); [...groupNames, "프로젝트 없음"].forEach((name) => map.set(name, [])); props.meetings.forEach((meeting) => { const key = projectGroups[meeting.id] || "프로젝트 없음"; map.set(key, [...(map.get(key) || []), meeting]); }); return [...map.entries()].filter(([, items]) => items.length || groupNames.includes("프로젝트 없음")); }, [props.meetings, projectGroups, groupNames]);
   const saveGroups = (next: Record<string, string>) => { setProjectGroups(next); localStorage.setItem("meeting-whisper-project-groups", JSON.stringify(next)); };
   const createGroup = async () => { const name = newGroupName.trim(); if (!name || groupNames.includes(name)) return; const response = await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }).catch(() => null); const payload = await response?.json().catch(() => null); if (!response?.ok || !payload?.project) { const next = [...groupNames, name]; setGroupNames(next); localStorage.setItem("meeting-whisper-project-names", JSON.stringify(next)); } else setGroupNames((current) => [...current, name]); setNewGroupName(""); };
