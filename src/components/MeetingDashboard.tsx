@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { MAX_AUDIO_UPLOAD_BYTES, ROLLING_BUFFER_LIMIT_MINUTES, useRollingAudioBuffer } from "@/hooks/useRollingAudioBuffer";
 import { useRealtimeTranscript } from "@/hooks/useRealtimeTranscript";
 import RealtimeTranscript from "@/components/RealtimeTranscript";
@@ -13,10 +14,10 @@ type Status = "idle" | "analyzing" | "transcribing" | "summarizing" | "generatin
 type Summary = { core: string; issues: string; speakingPoint: string; question: string; decision: string; numbers: string[] };
 type Meeting = { id: string; title: string; started_at: string; ended_at?: string | null; duration_seconds: number | null; status: string };
 type MeetingDetail = { meeting: Meeting; transcripts: { text: string; sequence: number }[]; summaries: Summary[]; responses: { text: string }[]; note: { content: string } | null };
-const providers: Record<Provider, { name: string; mark: string }> = { openai: { name: "OpenAI", mark: "O" }, gemini: { name: "Gemini", mark: "G" }, anthropic: { name: "Claude", mark: "C" } };
+const providers: Record<Provider, { name: string; icon: string }> = { openai: { name: "OpenAI", icon: "/provider-icons/chatgpt.png" }, gemini: { name: "Gemini", icon: "/provider-icons/gemini.png" }, anthropic: { name: "Claude", icon: "/provider-icons/claude.png" } };
 const time = (n: number) => `${Math.floor(n / 60).toString().padStart(2, "0")}:${(n % 60).toString().padStart(2, "0")}`;
 const date = (v: string) => new Date(v).toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
-function ProviderMark({ provider }: { provider: Provider }) { return <span className={`provider-mark provider-${provider}`}>{providers[provider].mark}</span>; }
+function ProviderMark({ provider }: { provider: Provider }) { return <Image className={`provider-mark provider-${provider}`} src={providers[provider].icon} alt="" aria-hidden="true" width={20} height={20} />; }
 
 type SidebarProps = { open: boolean; mobileOpen: boolean; meetings: Meeting[]; activeId: string; searchOpen: boolean; search: string; settingsOpen: boolean; theme: Theme; onCollapse: () => void; onNew: () => void; onMobileClose: () => void; onSelect: (meeting: Meeting) => void; onSearchOpen: () => void; onSearchChange: (value: string) => void; onSearch: () => void; onSettings: () => void; onTheme: (theme: Theme) => void; onProvider: (provider: Provider) => void };
 function Sidebar(props: SidebarProps) {
