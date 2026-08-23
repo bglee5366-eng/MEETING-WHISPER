@@ -13,3 +13,25 @@ html[data-font-size="4"] .archive-page { zoom: 1.08; }
 
 html[data-font-size="5"] .meeting-app,
 html[data-font-size="5"] .archive-page { zoom: 1.16; }
+
+/* Use the browser baseline for the primary reading text across the app. */
+.meeting-group-label,
+.sidebar-meeting-title,
+.workspace-detail .detail-section p,
+.workspace-detail .detail-section pre,
+.workspace-detail .detail-summary p,
+.project-context-grid p,
+.project-heading p,
+.project-ai-answer,
+.knowledge-item p { font-size: 16px !important; }
+
+.app-sidebar,
+.sidebar-meetings,
+.meeting-group,
+.sidebar-meeting-wrap,
+.sidebar-meeting { min-width: 0; max-width: 100%; overflow-x: hidden; }
+
+.workspace-project-page { padding-left: 24px; padding-right: 24px; }
+.workspace-project-page .project-workspace { width: 100%; max-width: none; margin-left: 0; margin-right: 0; }
+
+.start-meeting-button::before { content: "●"; display: inline-block; margin-right: 9px; color: #e53935; font-size: 14px; vertical-align: 1px; }
