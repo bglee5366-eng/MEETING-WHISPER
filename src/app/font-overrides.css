@@ -14,3 +14,17 @@ html[data-font-size="4"] .archive-page { zoom: 1.3; }
 
 html[data-font-size="5"] .meeting-app,
 html[data-font-size="5"] .archive-page { zoom: 1.42; }
+
+/* Keep the main reading surfaces on one comfortable baseline. */
+.meeting-group-label,
+.sidebar-meeting-title { font-size: 14px !important; }
+.sidebar-meeting span:last-child { font-size: 12px !important; }
+.transcript-segment p,
+.workspace-detail .detail-section p,
+.workspace-detail .detail-section pre,
+.workspace-detail .detail-summary p,
+.suggested-response { font-size: 15px !important; line-height: 1.75; }
+.transcript-segment time { font-size: 11px; }
+.realtime-empty,
+.realtime-transcript-header b { font-size: 14px !important; }
+.detail-section h3 { font-size: 18px; }
