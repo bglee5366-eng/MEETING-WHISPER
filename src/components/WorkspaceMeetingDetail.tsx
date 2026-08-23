@@ -7,7 +7,7 @@ type Provider = "openai" | "gemini" | "anthropic";
 type Summary = { core: string; issues: string; speakingPoint: string; question: string; decision: string; numbers: string[] };
 type Detail = { meeting: { id: string; title: string; started_at: string; duration_seconds: number | null }; transcripts: { text: string; sequence: number }[]; summaries: Summary[]; responses: { text: string }[]; note: { content: string } | null };
 
-export default function WorkspaceMeetingDetail({ detail: initialDetail, provider }: { detail: Detail; provider: Provider }) {
+export default function WorkspaceMeetingDetail({ detail: initialDetail, provider, onMeetingUpdated }: { detail: Detail; provider: Provider; onMeetingUpdated?: (meeting: Detail["meeting"]) => void }) {
   const [detail, setDetail] = useState(initialDetail);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(initialDetail.meeting.title);
@@ -25,7 +25,7 @@ export default function WorkspaceMeetingDetail({ detail: initialDetail, provider
       if (!meetingResponse.ok) throw new Error("회의 제목을 저장하지 못했습니다.");
       const noteResponse = await fetch(`/api/meeting-notes/${detail.meeting.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, content }) });
       if (!noteResponse.ok) throw new Error("회의 내용을 저장하지 못했습니다.");
-      setDetail((current) => ({ ...current, meeting: { ...current.meeting, title }, note: { content } }));
+      setDetail((current) => ({ ...current, meeting: { ...current.meeting, title }, note: { content } })); onMeetingUpdated?.({ ...detail.meeting, title });
       setEditing(false); setMessage("변경사항을 저장했습니다.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "변경사항을 저장하지 못했습니다."); }
     finally { setBusy(false); }
