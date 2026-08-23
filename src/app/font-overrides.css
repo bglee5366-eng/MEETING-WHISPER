@@ -1,0 +1,16 @@
+/* The app uses fixed typography tokens, so zoom is the reliable way to apply
+   the user's font-size preference consistently across every workspace panel. */
+html[data-font-size="1"] .meeting-app,
+html[data-font-size="1"] .archive-page { zoom: 1; }
+
+html[data-font-size="2"] .meeting-app,
+html[data-font-size="2"] .archive-page { zoom: 1.08; }
+
+html[data-font-size="3"] .meeting-app,
+html[data-font-size="3"] .archive-page { zoom: 1.18; }
+
+html[data-font-size="4"] .meeting-app,
+html[data-font-size="4"] .archive-page { zoom: 1.3; }
+
+html[data-font-size="5"] .meeting-app,
+html[data-font-size="5"] .archive-page { zoom: 1.42; }
