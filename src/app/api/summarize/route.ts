@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 function errorResponse(code: string, message: string, status: number) { return Response.json({ error: { code, message } }, { status }); }
 function upstreamError(provider: string, status: number) { if (status === 429) return `${provider} API 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.`; if (status >= 500) return `${provider} 서버에 일시적인 문제가 있습니다. 잠시 후 다시 시도해 주세요.`; return `${provider} 요약 요청이 거부되었습니다. Vercel Production 환경변수와 provider 설정을 확인해 주세요.`; }
-function promptFor(transcript: string) { return `너는 회의에 참석했지만 잠시 집중하지 못한 사람을 위한 "회의 멍때리기 방지 요약기"다. 사용자는 지금 갑자기 "OO님 의견은요?"라는 질문을 받을 수 있다. 일반적인 회의록을 작성하지 말고 직전 10분간의 대화를 빠르게 따라잡을 수 있는 3줄 컨닝페이퍼를 만들어라.
+function promptFor(transcript: string, projectContext = "") { return `너는 회의에 참석했지만 잠시 집중하지 못한 사람을 위한 "회의 멍때리기 방지 요약기"다. 사용자는 지금 갑자기 "OO님 의견은요?"라는 질문을 받을 수 있다. 일반적인 회의록을 작성하지 말고 직전 10분간의 대화를 빠르게 따라잡을 수 있는 3줄 컨닝페이퍼를 만들어라.
 
 반드시 JSON 객체만 반환하라. 스키마는 다음과 같다:
 {"core":"지금 논의한 핵심","issues":"주요 쟁점","speakingPoint":"내가 말할 때 참고할 포인트","question":"현재 나에게 직접 질문된 내용이 있다면 질문","decision":"방금 논의에서 결정된 내용","numbers":["중요 숫자 또는 일정"]}
@@ -22,6 +22,10 @@ function promptFor(transcript: string) { return `너는 회의에 참석했지�
 - 회의 내용이 불충분한 항목은 정확히 "현재 대화만으로는 판단하기 어렵습니다."라고 쓴다.
 - speakingPoint는 사용자의 의견을 임의로 만들지 말고, 회의에서 실제 언급된 객관적인 포인트만 제시한다.
 
+프로젝트 Context는 회의 원문을 보완하는 참고 정보로만 사용하고, 현재 회의 원문과 충돌하면 현재 회의 원문을 우선하라. 근거 없는 사실은 만들지 말라.
+프로젝트 Context:
+${projectContext || "제공되지 않음"}
+
 회의 원문:
 ${transcript}`; }
 
@@ -33,7 +37,7 @@ function normalize(value: unknown) {
 function parseJson(text: string) { try { return normalize(JSON.parse(text)); } catch { const start = text.indexOf("{"); const end = text.lastIndexOf("}"); return start >= 0 && end > start ? normalize(JSON.parse(text.slice(start, end + 1))) : fallback; } }
 
 export async function POST(request: Request) {
-  let body: { transcript?: unknown; provider?: unknown };
+  let body: { transcript?: unknown; provider?: unknown; projectContext?: unknown };
   try { body = await request.json(); } catch { return errorResponse("invalid_request", "요약할 회의 원문이 없습니다.", 400); }
   const transcript = typeof body.transcript === "string" ? body.transcript.trim() : "";
   const provider = body.provider === "gemini" || body.provider === "anthropic" ? body.provider : "openai";
@@ -41,7 +45,8 @@ export async function POST(request: Request) {
   if (transcript.length > 20_000) return errorResponse("invalid_request", "회의 원문이 너무 깁니다.", 413);
   const apiKey = provider === "gemini" ? process.env.GEMINI_API_KEY : provider === "anthropic" ? process.env.ANTHROPIC_API_KEY : process.env.OPENAI_API_KEY;
   if (!apiKey) return errorResponse("no_api_key", `서버에 ${provider === "gemini" ? "GEMINI_API_KEY" : provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"}가 설정되지 않았습니다.`, 503);
-  const prompt = promptFor(transcript);
+  const projectContext = typeof body.projectContext === "string" ? body.projectContext.slice(0, 15000) : "";
+  const prompt = promptFor(transcript, projectContext);
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     let response: Response;

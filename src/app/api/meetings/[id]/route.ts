@@ -23,6 +23,13 @@ export async function GET(_request: Request, context: Context) {
 export async function PATCH(request: Request, context: Context) {
   const supabase = createServerSupabaseClient(); if (!supabase) return unavailable();
   const { id } = await context.params; const body = await request.json().catch(() => ({}));
+  if (body.project_id !== undefined) {
+    const projectId = typeof body.project_id === "string" && body.project_id ? body.project_id : null;
+    if (projectId) { const project = await supabase.from("projects").select("id").eq("id", projectId).maybeSingle(); if (project.error || !project.data) return NextResponse.json({ error: { code: "invalid_project", message: "선택한 프로젝트를 찾을 수 없습니다." } }, { status: 400 }); }
+    const { data, error } = await supabase.from("meetings").update({ project_id: projectId }).eq("id", id).select("*").single();
+    if (error) return NextResponse.json({ error: { code: "supabase_error", message: "회의 프로젝트를 변경하지 못했습니다." } }, { status: 502 });
+    return NextResponse.json({ meeting: data });
+  }
   if (typeof body.title === "string") {
     const title = body.title.trim().slice(0, 200);
     if (!title) return NextResponse.json({ error: { code: "invalid_request", message: "회의 제목을 입력해 주세요." } }, { status: 400 });

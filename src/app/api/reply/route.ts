@@ -9,7 +9,7 @@ function errorResponse(code: string, message: string, status: number) {
 }
 function upstreamError(provider: string, status: number) { if (status === 429) return `${provider} API 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.`; if (status >= 500) return `${provider} 서버에 일시적인 문제가 있습니다. 잠시 후 다시 시도해 주세요.`; return `${provider} 한마디 답변 요청이 거부되었습니다. Vercel Production 환경변수와 provider 설정을 확인해 주세요.`; }
 
-function promptFor(transcript: string, summary: { core: string; issues: string; speakingPoint: string }) {
+function promptFor(transcript: string, summary: { core: string; issues: string; speakingPoint: string }, projectContext = "") {
   return `너는 회의 중 갑자기 발언을 요청받은 사람을 돕는 회의 귓속말 도우미다.
 회의 원문과 3줄 요약을 바탕으로 사용자가 바로 말할 수 있는 중립적인 한마디 답변을 작성하라.
 
@@ -26,12 +26,14 @@ ${summary.core}
 ${summary.issues}
 [내가 말할 때 참고할 포인트]
 ${summary.speakingPoint}
+[프로젝트 Context]
+${projectContext || "제공되지 않음"}
 [회의 원문]
 ${transcript}`;
 }
 
 export async function POST(request: Request) {
-  let body: { provider?: unknown; transcript?: unknown; summary?: { core?: unknown; issues?: unknown; speakingPoint?: unknown } };
+  let body: { provider?: unknown; transcript?: unknown; projectContext?: unknown; summary?: { core?: unknown; issues?: unknown; speakingPoint?: unknown } };
   try { body = await request.json(); } catch { return errorResponse("invalid_request", "답변을 만들 회의 내용이 없습니다.", 400); }
   const provider = body.provider === "gemini" || body.provider === "anthropic" ? body.provider : "openai";
   const transcript = typeof body.transcript === "string" ? body.transcript.trim() : "";
@@ -44,7 +46,8 @@ export async function POST(request: Request) {
   }
   const apiKey = provider === "gemini" ? process.env.GEMINI_API_KEY : provider === "anthropic" ? process.env.ANTHROPIC_API_KEY : process.env.OPENAI_API_KEY;
   if (!apiKey) return errorResponse("no_api_key", "선택한 provider의 서버 API 키가 설정되지 않았습니다.", 503);
-  const prompt = promptFor(transcript, { core: summary.core, issues: summary.issues, speakingPoint: summary.speakingPoint });
+  const projectContext = typeof body.projectContext === "string" ? body.projectContext.slice(0, 15000) : "";
+  const prompt = promptFor(transcript, { core: summary.core, issues: summary.issues, speakingPoint: summary.speakingPoint }, projectContext);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
