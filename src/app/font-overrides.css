@@ -37,6 +37,10 @@ html[data-font-size="5"] .archive-page { zoom: 1.16; }
 .workspace-body:has(.workspace-project-page) { width: 100% !important; max-width: none !important; padding-left: 38px; padding-right: 38px; }
 .workspace-project-page { width: 100% !important; max-width: none !important; }
 .workspace-project-page .project-workspace { width: 100% !important; max-width: none !important; }
+.workspace-detail { display: flex; flex-direction: column; }
+.workspace-detail #workspace-responses { order: 3; }
+.workspace-detail #workspace-notes { order: 4; }
+.workspace-detail #workspace-transcript { order: 5; }
 
 .start-meeting-button::before { content: "●"; display: inline-block; margin-right: 9px; color: #e53935; font-size: 14px; vertical-align: 1px; }
 
