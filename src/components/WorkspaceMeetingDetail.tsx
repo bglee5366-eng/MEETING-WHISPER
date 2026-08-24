@@ -7,8 +7,18 @@ type Provider = "openai" | "gemini" | "anthropic";
 type Summary = { core: string; issues: string; speakingPoint: string; question: string; decision: string; numbers: string[] };
 type Detail = { meeting: { id: string; title: string; started_at: string; duration_seconds: number | null }; transcripts: { text: string; sequence: number }[]; summaries: Summary[]; responses: { text: string }[]; note: { content: string } | null };
 
+function normalizeDetail(detail: Detail): Detail {
+  return {
+    ...detail,
+    summaries: detail.summaries.map((summary) => {
+      const stored = summary as Summary & { speaking_point?: string };
+      return { ...summary, speakingPoint: summary.speakingPoint || stored.speaking_point || "" };
+    }),
+  };
+}
+
 export default function WorkspaceMeetingDetail({ detail: initialDetail, provider, onMeetingUpdated }: { detail: Detail; provider: Provider; onMeetingUpdated?: (meeting: Detail["meeting"]) => void }) {
-  const [detail, setDetail] = useState(initialDetail);
+  const [detail, setDetail] = useState(() => normalizeDetail(initialDetail));
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(initialDetail.meeting.title);
   const [content, setContent] = useState(initialDetail.note?.content || "");
