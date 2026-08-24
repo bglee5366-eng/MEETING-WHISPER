@@ -33,6 +33,7 @@ html[data-font-size="5"] .archive-page { zoom: 1.16; }
 
 .workspace-project-page { padding-left: 24px; padding-right: 24px; }
 .workspace-project-page .project-workspace { width: 100%; max-width: none; margin-left: 0; margin-right: 0; }
+.project-workspace { width: 100%; max-width: none; margin-left: 0; margin-right: 0; }
 
 .start-meeting-button::before { content: "●"; display: inline-block; margin-right: 9px; color: #e53935; font-size: 14px; vertical-align: 1px; }
 
