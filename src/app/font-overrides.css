@@ -42,6 +42,23 @@ html[data-font-size="5"] .archive-page { zoom: 1.16; }
 .workspace-detail #workspace-notes { order: 4; }
 .workspace-detail #workspace-transcript { order: 5; }
 
+/* Scale the whole document so portal menus and every fixed-size label follow the same preference. */
+html[data-font-size="1"] body { zoom: .86; }
+html[data-font-size="2"] body { zoom: .93; }
+html[data-font-size="3"] body { zoom: 1; }
+html[data-font-size="4"] body { zoom: 1.08; }
+html[data-font-size="5"] body { zoom: 1.16; }
+html[data-font-size="1"] .meeting-app,
+html[data-font-size="2"] .meeting-app,
+html[data-font-size="3"] .meeting-app,
+html[data-font-size="4"] .meeting-app,
+html[data-font-size="5"] .meeting-app,
+html[data-font-size="1"] .archive-page,
+html[data-font-size="2"] .archive-page,
+html[data-font-size="3"] .archive-page,
+html[data-font-size="4"] .archive-page,
+html[data-font-size="5"] .archive-page { zoom: 1 !important; }
+
 .start-meeting-button::before { content: "●"; display: inline-block; margin-right: 9px; color: #e53935; font-size: 14px; vertical-align: 1px; }
 
 .new-meeting-view > p { max-width: 600px; margin-bottom: 40px; font-size: 0 !important; line-height: 1.8; white-space: pre-line; }
