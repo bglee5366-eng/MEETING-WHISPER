@@ -41,6 +41,8 @@ html[data-font-size="5"] .archive-page { zoom: 1.16; }
 .workspace-detail #workspace-responses { order: 3; }
 .workspace-detail #workspace-notes { order: 4; }
 .workspace-detail #workspace-transcript { order: 5; }
+.sidebar-section-header,
+.settings-button { font-size: 16px !important; }
 
 /* Scale the whole document so portal menus and every fixed-size label follow the same preference. */
 html[data-font-size="1"] body { zoom: .86; }
