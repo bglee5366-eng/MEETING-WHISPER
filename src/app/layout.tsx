@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./whisper.css";
 import "./font-overrides.css";
+import "./marketing.css";
 
 export const metadata: Metadata = {
   title: "Meeting Whisper — AI Meeting Copilot",
