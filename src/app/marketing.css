@@ -9,6 +9,8 @@
   border-radius: 12px;
   background: var(--surface);
 }
+.new-meeting-view { width: min(100%, 1120px); max-width: 1120px; margin-inline: auto; }
+.new-meeting-view .product-hero { width: 100%; box-sizing: border-box; }
 .product-hero-copy h3 { margin: 0 0 14px; color: var(--foreground); font-size: clamp(24px, 3vw, 36px); line-height: 1.18; letter-spacing: -0.06em; }
 .product-hero-copy p { margin: 0 0 20px; color: var(--muted); font-size: 14px; line-height: 1.75; }
 .product-hero-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -34,4 +36,5 @@
 @keyframes demo-rescue { 0%, 52% { opacity: 0.35; transform: scale(0.98); } 58%, 85% { opacity: 1; transform: scale(1); } 100% { opacity: 0.6; } }
 @keyframes demo-brief { 0%, 60% { opacity: 0; transform: translateY(8px); } 68%, 100% { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .demo-transcript p, .demo-transcript strong, .demo-rescue, .demo-brief { animation: none; opacity: 1; transform: none; } }
+@media (min-width: 768px) and (max-width: 1100px) { .product-hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 18px; padding: 18px; } .product-demo { min-height: 260px; } }
 @media (max-width: 767px) { .product-hero { grid-template-columns: 1fr; gap: 18px; margin: 4px -2px 26px; padding: 18px; } .product-hero-copy h3 { font-size: 28px; } .product-hero-copy p { font-size: 13px; } .product-demo { min-height: 245px; } .demo-brief { right: 12px; bottom: 38px; width: 58%; } .demo-footer { right: 12px; bottom: 11px; } .demo-footer small { display: none; } }
